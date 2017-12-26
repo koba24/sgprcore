@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
-// Copyright (c) 2014-2017 The Dash Core developers
+// Copyright (c) 2014-2017 The Sgpr Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -265,41 +265,6 @@ public:
     }
 };
 
-/** Reads data from an underlying stream, while hashing the read data. */
-template<typename Source>
-class CHashVerifier : public CHashWriter
-{
-private:
-    Source* source;
-
-public:
-    CHashVerifier(Source* source_) : CHashWriter(source_->GetType(), source_->GetVersion()), source(source_) {}
-
-    void read(char* pch, size_t nSize)
-    {
-        source->read(pch, nSize);
-        this->write(pch, nSize);
-    }
-
-    void ignore(size_t nSize)
-    {
-        char data[1024];
-        while (nSize > 0) {
-            size_t now = std::min<size_t>(nSize, 1024);
-            read(data, now);
-            nSize -= now;
-        }
-    }
-
-    template<typename T>
-    CHashVerifier<Source>& operator>>(T& obj)
-    {
-        // Unserialize from this stream
-        ::Unserialize(*this, obj, nType, nVersion);
-        return (*this);
-    }
-};
-
 /** Compute the 256-bit hash of an object's serialization. */
 template<typename T>
 uint256 SerializeHash(const T& obj, int nType=SER_GETHASH, int nVersion=PROTOCOL_VERSION)
@@ -313,23 +278,7 @@ unsigned int MurmurHash3(unsigned int nHashSeed, const std::vector<unsigned char
 
 void BIP32Hash(const ChainCode &chainCode, unsigned int nChild, unsigned char header, const unsigned char data[32], unsigned char output[64]);
 
-/** SipHash-2-4, using a uint64_t-based (rather than byte-based) interface */
-class CSipHasher
-{
-private:
-    uint64_t v[4];
-    int count;
-
-public:
-    CSipHasher(uint64_t k0, uint64_t k1);
-    CSipHasher& Write(uint64_t data);
-    uint64_t Finalize() const;
-};
-
-uint64_t SipHashUint256(uint64_t k0, uint64_t k1, const uint256& val);
-uint64_t SipHashUint256Extra(uint64_t k0, uint64_t k1, const uint256& val, uint32_t extra);
-
-/* ----------- Dash Hash ------------------------------------------------ */
+/* ----------- Sgpr Hash ------------------------------------------------ */
 template<typename T1>
 inline uint256 HashX11(const T1 pbegin, const T1 pend)
 
@@ -394,6 +343,46 @@ inline uint256 HashX11(const T1 pbegin, const T1 pend)
     sph_echo512_close(&ctx_echo, static_cast<void*>(&hash[10]));
 
     return hash[10].trim256();
+}
+
+
+template<typename T1>
+inline uint256 Nist5(const T1 pbegin, const T1 pend)
+{
+    sph_blake512_context     ctx_blake;
+    sph_groestl512_context   ctx_groestl;
+    sph_jh512_context        ctx_jh;
+    sph_keccak512_context    ctx_keccak;
+    sph_skein512_context     ctx_skein;
+
+    static unsigned char pblank[1];
+    uint512 hash[17];
+
+    // Blake512
+    sph_blake512_init(&ctx_blake);
+    sph_blake512(&ctx_blake, (pbegin == pend ? pblank : (unsigned char*)&pbegin[0]), (pend - pbegin) * sizeof(pbegin[0]));
+    sph_blake512_close(&ctx_blake, static_cast<void*>(&hash[0]));
+    // Groestl512
+    sph_groestl512_init(&ctx_groestl);
+    sph_groestl512(&ctx_groestl, static_cast<const void*>(&hash[0]), 64);
+    sph_groestl512_close(&ctx_groestl, static_cast<void*>(&hash[1]));
+    // Jh512
+    sph_jh512_init(&ctx_jh);
+    sph_jh512(&ctx_jh, static_cast<const void*>(&hash[1]), 64);
+    sph_jh512_close(&ctx_jh, static_cast<void*>(&hash[2]));
+    // Keccak512
+    sph_keccak512_init(&ctx_keccak);
+    sph_keccak512(&ctx_keccak, static_cast<const void*>(&hash[2]), 64);
+    sph_keccak512_close(&ctx_keccak, static_cast<void*>(&hash[3]));
+    // Skein512
+    sph_skein512_init(&ctx_skein);
+    sph_skein512(&ctx_skein, static_cast<const void*>(&hash[3]), 64);
+    sph_skein512_close(&ctx_skein, static_cast<void*>(&hash[4]));
+
+
+    //printf("\nhash: %s\n", hash.ToString().c_str());
+
+    return hash[4].trim256();
 }
 
 #endif // BITCOIN_HASH_H

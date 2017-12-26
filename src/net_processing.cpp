@@ -35,9 +35,7 @@
 #include "masternode-payments.h"
 #include "masternode-sync.h"
 #include "masternodeman.h"
-#ifdef ENABLE_WALLET
 #include "privatesend-client.h"
-#endif // ENABLE_WALLET
 #include "privatesend-server.h"
 
 #include <boost/thread.hpp>
@@ -45,7 +43,7 @@
 using namespace std;
 
 #if defined(NDEBUG)
-# error "Dash Core cannot be compiled without assertions."
+# error "Sgpr Core cannot be compiled without assertions."
 #endif
 
 int64_t nTimeBestReceived = 0; // Used only to inform the wallet of when we last received a block
@@ -696,15 +694,14 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             return recentRejects->contains(inv.hash) ||
                    mempool.exists(inv.hash) ||
                    mapOrphanTransactions.count(inv.hash) ||
-                   pcoinsTip->HaveCoinInCache(COutPoint(inv.hash, 0)) || // Best effort: only try output 0 and 1
-                   pcoinsTip->HaveCoinInCache(COutPoint(inv.hash, 1));
+                   pcoinsTip->HaveCoins(inv.hash);
         }
 
     case MSG_BLOCK:
         return mapBlockIndex.count(inv.hash);
 
     /* 
-        Dash Related Inventory Messages
+        Sgpr Related Inventory Messages
 
         --
 
@@ -2165,9 +2162,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (found)
         {
             //probably one the extensions
-#ifdef ENABLE_WALLET
             privateSendClient.ProcessMessage(pfrom, strCommand, vRecv, connman);
-#endif // ENABLE_WALLET
             privateSendServer.ProcessMessage(pfrom, strCommand, vRecv, connman);
             mnodeman.ProcessMessage(pfrom, strCommand, vRecv, connman);
             mnpayments.ProcessMessage(pfrom, strCommand, vRecv, connman);
